@@ -12,6 +12,7 @@
   "dependencies": {
     "react": "18.2.0",
     "react-native": "0.71.11",
+    "react-native-background-actions": "^3.0.0",
     "react-native-background-timer": "^2.4.1",
     "react-native-sound": "^0.11.2",
     "react-native-webview": "^13.2.2"

@@ -9,61 +9,102 @@ import {
   RefreshControl,
 } from 'react-native';
 import WebView from 'react-native-webview';
-import BackgroundTimer from 'react-native-background-timer';
+import BackgroundService from 'react-native-background-actions';
 // import BackgroundFetch from 'react-native-background-fetch';
 // ('react-native-background-fetch');
+// import './bgTask';
 
 let intervalId = -1;
 
+const sleep = (time: any) =>
+  // @ts-ignore
+  new Promise(resolve => setTimeout(() => resolve(), time));
+
+const veryIntensiveTask = async (taskDataArguments: any) => {
+  // Example of an infinite loop task
+  const {delay} = taskDataArguments;
+  await new Promise(async resolve => {
+    for (let i = 0; BackgroundService.isRunning(); i++) {
+      // call api
+      await fetch('https://api.xephang.online/api/enroll-queues/my-enroll')
+        .then(async response => {
+          const data = await response.json();
+          console.log('vibrate interval');
+          for (const item of data) {
+            // check if currentQueue + 1 === sequenceNumber
+            if (item.currentQueue + 1 === item.sequenceNumber) {
+              Vibration.vibrate(1000);
+              await BackgroundService.updateNotification({
+                taskDesc:
+                  'Bạn có hàng đợi sắp đến lượt với số: ' + item.sequenceNumber,
+              });
+            }
+          }
+        })
+        .catch(error => {
+          console.error(error);
+        });
+      await sleep(delay);
+    }
+  });
+};
+
+const options = {
+  taskName: 'QueueApp',
+  taskTitle: 'QueueApp',
+  taskDesc: 'Hàng đợi của bạn đang được theo dõi',
+  taskIcon: {
+    name: 'ic_launcher',
+    type: 'mipmap',
+  },
+  color: '#ff00ff',
+  linkingURI: 'yourSchemeHere://chat/jane', // See Deep Linking for more info
+  parameters: {
+    delay: 5000,
+  },
+};
+
 const App = () => {
   const [url, setUrl] = React.useState('https://xephang.online');
-
-  const fetchData = async () => {
-    const response = await fetch(
-      'https://api.xephang.online/api/enroll-queues/my-enroll',
-    );
-    const data = await response.json();
-    for (const item of data) {
-      if (
-        item.currentQueue + 1 === item.sequenceNumber &&
-        item.status === 'pending'
-      ) {
-        console.log('vibrate');
-        // BackgroundFetch.start();
-        Vibration.vibrate(3000);
-      }
-    }
-  };
-
-  React.useEffect(() => {
-    if (url.endsWith('/public/home') && intervalId === -1) {
-      intervalId = BackgroundTimer.setInterval(async () => {
-        fetchData();
-      }, 5000);
-    }
-    if (!url.endsWith('/public/home') && intervalId !== -1) {
-      BackgroundTimer.clearInterval(intervalId);
-      intervalId = -1;
-    }
-
-    return () => {
-      BackgroundTimer.clearInterval(intervalId);
-    };
-  }, [url]);
-  React.useEffect(() => {
-    return () => {
-      BackgroundTimer.clearInterval(intervalId);
-    };
-  }, []);
 
   const [refreshing, setRefreshing] = React.useState(false);
 
   const onRefresh = React.useCallback(() => {
     setRefreshing(true);
-    fetchData();
+    // fetchData();
     setTimeout(() => {
       setRefreshing(false);
     }, 2000);
+  }, []);
+
+  const startBackgroundService = async () => {
+    await BackgroundService.start(veryIntensiveTask, options);
+    await BackgroundService.updateNotification({
+      taskDesc: 'Queue App đang chạy',
+    }); // Only Android, iOS will ignore this call
+  };
+  const stopBackgroundService = async () => {
+    await BackgroundService.stop();
+  };
+
+  React.useEffect(() => {
+    if (url === 'https://xephang.online/public/home' && intervalId === -1) {
+      startBackgroundService();
+      intervalId = 1;
+    } else {
+      console.log('url interval', url);
+      stopBackgroundService();
+      intervalId = -1;
+    }
+    return () => {
+      stopBackgroundService();
+    };
+  }, [url]);
+
+  React.useEffect(() => {
+    return () => {
+      stopBackgroundService();
+    };
   }, []);
 
   return (
